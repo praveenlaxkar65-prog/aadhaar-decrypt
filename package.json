@@ -4,8 +4,8 @@
   "description": "Decrypt password-protected Aadhaar PDFs using qpdf",
   "main": "server.js",
   "scripts": {
-    "install-qpdf": "apt-get update && apt-get install -y qpdf || (brew install qpdf 2>/dev/null || echo 'qpdf install attempted')",
-    "build": "apt-get update -y && apt-get install -y qpdf",
+    "postinstall": "apt-get update -y && apt-get install -y qpdf || true",
+    "build": "npm install",
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
