@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aadhaar Vault — PDF Unlock</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            syne: ["Syne", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+          },
+          colors: {
+            vault: {
+              bg:      "#080B10",
+              panel:   "#0D1117",
+              border:  "#1C2333",
+              accent:  "#00D4AA",
+              accentd: "#00A882",
+              gold:    "#F5A623",
+              muted:   "#4A5568",
+              text:    "#C9D1D9",
+              dim:     "#8B949E",
+            },
+          },
+          animation: {
+            "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+            "spin-slow":  "spin 8s linear infinite",
+            "fade-up":    "fadeUp 0.5s ease forwards",
+          },
+          keyframes: {
+            fadeUp: {
+              "0%":   { opacity: "0", transform: "translateY(16px)" },
+              "100%": { opacity: "1", transform: "translateY(0)" },
+            },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background: #080B10;
+      font-family: "Syne", sans-serif;
+      color: #C9D1D9;
+      min-height: 100vh;
+    }
+
+    /* Animated grid background */
+    .grid-bg {
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+    .grid-glow {
+      position: fixed; inset: 0; z-index: 0;
+      background: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0,212,170,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* Panel glass effect */
+    .glass-panel {
+      background: rgba(13,17,23,0.92);
+      border: 1px solid #1C2333;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 0 0 1px rgba(0,212,170,0.04), 0 24px 64px rgba(0,0,0,0.6);
+    }
+
+    /* Accent glow ring */
+    .glow-ring {
+      box-shadow: 0 0 0 1px rgba(0,212,170,0.3), 0 0 20px rgba(0,212,170,0.1);
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 1.5px dashed #1C2333;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .drop-zone::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0,212,170,0.04), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #00D4AA;
+      box-shadow: 0 0 30px rgba(0,212,170,0.1);
+    }
+    .drop-zone:hover::before, .drop-zone.drag-over::before { opacity: 1; }
+
+    /* Password badge */
+    .pwd-badge {
+      font-family: "JetBrains Mono", monospace;
+      letter-spacing: 0.15em;
+      background: linear-gradient(135deg, rgba(0,212,170,0.1), rgba(0,212,170,0.05));
+      border: 1px solid rgba(0,212,170,0.25);
+      transition: all 0.3s;
+    }
+    .pwd-badge.active {
+      border-color: rgba(0,212,170,0.6);
+      box-shadow: 0 0 20px rgba(0,212,170,0.15);
+      color: #00D4AA;
+    }
+
+    /* Input styling */
+    .vault-input {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid #1C2333;
+      color: #C9D1D9;
+      font-family: "JetBrains Mono", monospace;
+      transition: all 0.2s;
+      outline: none;
+    }
+    .vault-input::placeholder { color: #4A5568; }
+    .vault-input:focus {
+      border-color: rgba(0,212,170,0.5);
+      box-shadow: 0 0 0 3px rgba(0,212,170,0.07);
+      background: rgba(0,212,170,0.03);
+    }
+
+    /* Decrypt button */
+    .decrypt-btn {
+      background: linear-gradient(135deg, #00D4AA, #00A882);
+      color: #080B10;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      transition: all 0.25s;
+      position: relative;
+      overflow: hidden;
+    }
+    .decrypt-btn::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .decrypt-btn:hover::after { opacity: 1; }
+    .decrypt-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(0,212,170,0.35); }
+    .decrypt-btn:active { transform: translateY(0); }
+    .decrypt-btn:disabled {
+      background: #1C2333; color: #4A5568;
+      cursor: not-allowed; box-shadow: none; transform: none;
+    }
+
+    /* Progress bar */
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #00D4AA, #00A882, #00D4AA);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      transition: width 0.4s ease;
+      border-radius: inherit;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Status states */
+    .status-success { color: #00D4AA; }
+    .status-error   { color: #FF6B6B; }
+    .status-loading { color: #F5A623; }
+
+    /* Step indicator dots */
+    .step-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #1C2333;
+      transition: all 0.3s;
+    }
+    .step-dot.active { background: #00D4AA; box-shadow: 0 0 8px rgba(0,212,170,0.6); }
+    .step-dot.done   { background: #00A882; }
+
+    /* Tag chip */
+    .tag { font-size: 10px; letter-spacing: 0.1em; font-family: "JetBrains Mono", monospace; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #1C2333; border-radius: 2px; }
+
+    /* Char blocks in password preview */
+    .char-block {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 36px; border-radius: 6px;
+      border: 1px solid rgba(0,212,170,0.2);
+      background: rgba(0,212,170,0.06);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 15px; font-weight: 500;
+      color: #00D4AA;
+      transition: all 0.2s;
+    }
+    .char-block.year { border-color: rgba(245,166,35,0.3); background: rgba(245,166,35,0.06); color: #F5A623; }
+  </style>
+</head>
+
+<body class="overflow-x-hidden">
+  <div class="grid-bg"></div>
+  <div class="grid-glow"></div>
+
+  <!-- ── TOP NAV ─────────────────────────────────────────────────────────── -->
+  <nav class="relative z-10 flex items-center justify-between px-6 py-4 border-b border-vault-border">
+    <div class="flex items-center gap-3">
+      <!-- Logo mark -->
+      <div class="relative w-8 h-8">
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-8 h-8">
+          <rect x="1" y="1" width="30" height="30" rx="7" stroke="#00D4AA" stroke-width="1.5" stroke-opacity="0.4"/>
+          <path d="M16 6L24 10V16C24 20.4 20.4 24.4 16 26C11.6 24.4 8 20.4 8 16V10L16 6Z" fill="rgba(0,212,170,0.1)" stroke="#00D4AA" stroke-width="1.5"/>
+          <path d="M13 16l2 2 4-4" stroke="#00D4AA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <span class="font-syne font-800 text-lg tracking-tight text-white">Aadhaar<span class="text-vault-accent">Vault</span></span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="tag text-vault-dim uppercase px-2 py-1 rounded border border-vault-border">v1.0</span>
+      <div id="serverStatus" class="flex items-center gap-2 text-xs font-mono text-vault-dim">
+        <span class="w-2 h-2 rounded-full bg-vault-muted animate-pulse-slow"></span>
+        <span>checking server…</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── MAIN ────────────────────────────────────────────────────────────── -->
+  <main class="relative z-10 max-w-5xl mx-auto px-4 py-10">
+
+    <!-- Header -->
+    <div class="text-center mb-10">
+      <p class="tag text-vault-accent uppercase tracking-widest mb-3">UIDAI Official Format · AES-256 Decrypt</p>
+      <h1 class="font-syne font-extrabold text-4xl md:text-5xl text-white leading-tight mb-3">
+        Unlock Your Aadhaar PDF
+      </h1>
+      <p class="text-vault-dim text-sm max-w-lg mx-auto leading-relaxed">
+        Decrypts using <code class="text-vault-accent bg-vault-border px-1.5 py-0.5 rounded text-xs">qpdf</code> on the server — preserves vector layers, selectable text &amp; embedded digital signatures. No canvas conversion.
+      </p>
+    </div>
+
+    <!-- ── TWO-COLUMN LAYOUT ─────────────────────────────────────────────── -->
+    <div class="grid md:grid-cols-5 gap-5">
+
+      <!-- LEFT: Inputs + password gen (3 cols) -->
+      <div class="md:col-span-3 space-y-4">
+
+        <!-- Password generator card -->
+        <div class="glass-panel rounded-2xl p-6">
+          <div class="flex items-center gap-3 mb-5">
+            <div class="w-1 h-5 bg-vault-accent rounded-full"></div>
+            <span class="font-syne font-semibold text-white text-sm tracking-wide uppercase">Password Generator</span>
+            <span class="tag text-vault-dim ml-auto">UIDAI Formula</span>
+          </div>
+
+          <div class="space-y-4">
+            <!-- Name input -->
+            <div>
+              <label class="block text-vault-dim text-xs font-mono uppercase tracking-widest mb-1.5">Customer Name</label>
+              <input
+                id="customerName"
+                type="text"
+                placeholder="e.g. Praveen Kumar"
+                class="vault-input w-full px-4 py-3 rounded-xl text-sm"
+                autocomplete="off"
+                oninput="generatePassword()"
+              />
+              <p class="text-vault-muted text-xs font-mono mt-1.5">First 4 letters (uppercase) · spaces & dots stripped</p>
+            </div>
+
+            <!-- DOB input -->
+            <div>
+              <label class="block text-vault-dim text-xs font-mono uppercase tracking-widest mb-1.5">Date of Birth</label>
+              <input
+                id="dob"
+                type="text"
+                placeholder="YYYY  or  DD/MM/YYYY"
+                class="vault-input w-full px-4 py-3 rounded-xl text-sm"
+                autocomplete="off"
+                oninput="generatePassword()"
+              />
+              <p class="text-vault-muted text-xs font-mono mt-1.5">4-digit year extracted automatically</p>
+            </div>
+
+            <!-- Password preview -->
+            <div class="mt-1">
+              <label class="block text-vault-dim text-xs font-mono uppercase tracking-widest mb-2">Generated Password</label>
+              <div id="pwdDisplay" class="pwd-badge rounded-xl px-4 py-3 flex items-center justify-between">
+                <div id="charBlocks" class="flex gap-1.5">
+                  <span class="text-vault-muted text-sm font-mono">Enter name &amp; DOB above…</span>
+                </div>
+                <button onclick="copyPassword()" id="copyBtn" class="text-vault-muted hover:text-vault-accent transition-colors text-xs font-mono uppercase tracking-wider flex items-center gap-1">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copy
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Manual override -->
+        <div class="glass-panel rounded-2xl p-6">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-1 h-5 bg-vault-gold rounded-full"></div>
+            <span class="font-syne font-semibold text-white text-sm tracking-wide uppercase">Manual Override</span>
+            <span class="tag text-vault-dim ml-auto">Optional</span>
+          </div>
+          <label class="block text-vault-dim text-xs font-mono uppercase tracking-widest mb-1.5">Custom Password</label>
+          <input
+            id="manualPwd"
+            type="text"
+            placeholder="Leave blank to use generated password"
+            class="vault-input w-full px-4 py-3 rounded-xl text-sm"
+            autocomplete="off"
+          />
+          <p class="text-vault-muted text-xs font-mono mt-2">Overrides auto-generated password if filled</p>
+        </div>
+
+      </div><!-- /left -->
+
+      <!-- RIGHT: Upload + action (2 cols) -->
+      <div class="md:col-span-2 space-y-4">
+
+        <!-- File drop zone -->
+        <div class="glass-panel rounded-2xl p-6 flex flex-col" style="min-height: 220px;">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-1 h-5 bg-vault-accent rounded-full"></div>
+            <span class="font-syne font-semibold text-white text-sm tracking-wide uppercase">PDF Upload</span>
+          </div>
+
+          <div
+            id="dropZone"
+            class="drop-zone rounded-xl flex-1 flex flex-col items-center justify-center gap-3 p-6 cursor-pointer"
+            onclick="document.getElementById('pdfInput').click()"
+            ondragover="handleDragOver(event)"
+            ondragleave="handleDragLeave(event)"
+            ondrop="handleDrop(event)"
+          >
+            <div id="dropIcon" class="transition-transform duration-300">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00D4AA" stroke-width="1.2" stroke-opacity="0.5">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="12" y1="18" x2="12" y2="12"/>
+                <polyline points="9 15 12 12 15 15"/>
+              </svg>
+            </div>
+            <div class="text-center">
+              <p id="dropText" class="text-vault-dim text-sm font-mono">Drop PDF here or click</p>
+              <p class="text-vault-muted text-xs font-mono mt-1">Max 20 MB · .pdf only</p>
+            </div>
+          </div>
+          <input id="pdfInput" type="file" accept="application/pdf" class="hidden" onchange="handleFileSelect(this)" />
+
+          <!-- Selected file pill -->
+          <div id="filePill" class="hidden mt-3 flex items-center gap-2 bg-vault-border rounded-lg px-3 py-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00D4AA" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span id="fileName" class="text-vault-accent text-xs font-mono flex-1 truncate"></span>
+            <span id="fileSize" class="text-vault-muted text-xs font-mono ml-auto"></span>
+            <button onclick="clearFile()" class="text-vault-muted hover:text-red-400 transition-colors ml-1">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- API URL config -->
+        <div class="glass-panel rounded-2xl p-4">
+          <label class="block text-vault-dim text-xs font-mono uppercase tracking-widest mb-2">Backend API URL</label>
+          <input
+            id="apiUrl"
+            type="text"
+            value="http://localhost:3000/decrypt"
+            class="vault-input w-full px-3 py-2.5 rounded-lg text-xs"
+          />
+          <p class="text-vault-muted text-xs font-mono mt-1.5">Change to your Render/Koyeb URL after deploy</p>
+        </div>
+
+        <!-- Decrypt button -->
+        <button
+          id="decryptBtn"
+          onclick="decryptPDF()"
+          disabled
+          class="decrypt-btn w-full py-4 rounded-2xl text-sm uppercase tracking-widest flex items-center justify-center gap-2.5"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+          <span id="btnText">Decrypt PDF</span>
+        </button>
+
+      </div><!-- /right -->
+    </div><!-- /grid -->
+
+    <!-- ── PROGRESS + STATUS ──────────────────────────────────────────────── -->
+    <div id="statusCard" class="glass-panel rounded-2xl p-5 mt-5 hidden">
+
+      <!-- Steps -->
+      <div class="flex items-center justify-between mb-5 px-2">
+        <div class="step-item flex flex-col items-center gap-1.5" data-step="1">
+          <div class="step-dot" id="dot1"></div>
+          <span class="text-vault-muted font-mono text-xs">Upload</span>
+        </div>
+        <div class="flex-1 h-px bg-vault-border mx-2"></div>
+        <div class="step-item flex flex-col items-center gap-1.5" data-step="2">
+          <div class="step-dot" id="dot2"></div>
+          <span class="text-vault-muted font-mono text-xs">Decrypt</span>
+        </div>
+        <div class="flex-1 h-px bg-vault-border mx-2"></div>
+        <div class="step-item flex flex-col items-center gap-1.5" data-step="3">
+          <div class="step-dot" id="dot3"></div>
+          <span class="text-vault-muted font-mono text-xs">Download</span>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="h-1.5 bg-vault-border rounded-full overflow-hidden mb-4">
+        <div class="progress-fill rounded-full" id="progressBar" style="width: 0%"></div>
+      </div>
+
+      <!-- Status message -->
+      <div class="flex items-start gap-3">
+        <div id="statusIcon" class="mt-0.5 flex-shrink-0"></div>
+        <div>
+          <p id="statusText" class="text-sm font-mono font-medium"></p>
+          <p id="statusSub" class="text-vault-dim text-xs font-mono mt-0.5"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── HOW IT WORKS ───────────────────────────────────────────────────── -->
+    <div class="glass-panel rounded-2xl p-6 mt-5">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-1 h-5 bg-vault-gold rounded-full"></div>
+        <span class="font-syne font-semibold text-white text-sm tracking-wide uppercase">How It Works</span>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="flex flex-col gap-2">
+          <span class="text-vault-accent font-mono text-xs tag uppercase">01 · Generate</span>
+          <p class="text-vault-dim text-xs leading-relaxed">Name + DOB → UIDAI formula → password like <code class="text-white">PRAV1998</code></p>
+        </div>
+        <div class="flex flex-col gap-2">
+          <span class="text-vault-accent font-mono text-xs tag uppercase">02 · Upload</span>
+          <p class="text-vault-dim text-xs leading-relaxed">PDF sent via multipart FormData to the Express backend over HTTPS</p>
+        </div>
+        <div class="flex flex-col gap-2">
+          <span class="text-vault-accent font-mono text-xs tag uppercase">03 · qpdf</span>
+          <p class="text-vault-dim text-xs leading-relaxed"><code class="text-white">qpdf --decrypt</code> runs server-side. Full AES-256 support, no canvas conversion</p>
+        </div>
+        <div class="flex flex-col gap-2">
+          <span class="text-vault-accent font-mono text-xs tag uppercase">04 · Stream</span>
+          <p class="text-vault-dim text-xs leading-relaxed">Decrypted PDF streamed back as binary blob. Temp files deleted instantly</p>
+        </div>
+      </div>
+    </div>
+
+  </main><!-- /main -->
+
+  <!-- ── SCRIPTS ─────────────────────────────────────────────────────────── -->
+  <script>
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATE
+  // ═══════════════════════════════════════════════════════════════════════════
+  let selectedFile = null;
+  let generatedPassword = "";
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PASSWORD GENERATOR — UIDAI Formula
+  // ═══════════════════════════════════════════════════════════════════════════
+  function generatePassword() {
+    const rawName = document.getElementById("customerName").value;
+    const rawDob  = document.getElementById("dob").value.trim();
+
+    // ── Extract 4-letter name prefix ──────────────────────────────────────
+    // Strip spaces, dots, and any non-alphabetic characters
+    const cleanName = rawName.replace(/[\s.]+/g, "").replace(/[^A-Za-z]/g, "");
+    const namePart  = cleanName.toUpperCase().slice(0, 4).padEnd(4, "X");
+
+    // ── Extract 4-digit year ──────────────────────────────────────────────
+    let yearPart = "";
+    // Try DD/MM/YYYY or D/M/YYYY
+    const slashMatch = rawDob.match(/\d{1,2}\/\d{1,2}\/(\d{4})/);
+    if (slashMatch) {
+      yearPart = slashMatch[1];
+    } else {
+      // Try bare YYYY (exactly 4 digits)
+      const bareYear = rawDob.match(/\b(\d{4})\b/);
+      if (bareYear) yearPart = bareYear[1];
+    }
+
+    const isValid = cleanName.length > 0 && yearPart.length === 4;
+    generatedPassword = isValid ? namePart + yearPart : "";
+
+    // ── Update char blocks display ────────────────────────────────────────
+    const container = document.getElementById("charBlocks");
+    const display   = document.getElementById("pwdDisplay");
+
+    if (!isValid) {
+      container.innerHTML = `<span class="text-vault-muted text-sm font-mono">Enter name &amp; DOB above…</span>`;
+      display.classList.remove("active");
+    } else {
+      let html = "";
+      // Name chars (teal)
+      for (const ch of namePart) {
+        html += `<span class="char-block">${ch}</span>`;
+      }
+      // Separator
+      html += `<span class="text-vault-muted mx-0.5 font-mono self-center text-sm">·</span>`;
+      // Year chars (gold)
+      for (const ch of yearPart) {
+        html += `<span class="char-block year">${ch}</span>`;
+      }
+      container.innerHTML = html;
+      display.classList.add("active");
+    }
+
+    updateDecryptButton();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FILE HANDLING
+  // ═══════════════════════════════════════════════════════════════════════════
+  function handleFileSelect(input) {
+    if (input.files && input.files[0]) setFile(input.files[0]);
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    document.getElementById("dropZone").classList.add("drag-over");
+  }
+
+  function handleDragLeave(e) {
+    document.getElementById("dropZone").classList.remove("drag-over");
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById("dropZone").classList.remove("drag-over");
+    const file = e.dataTransfer.files[0];
+    if (file && file.type === "application/pdf") {
+      setFile(file);
+    } else {
+      showStatus("error", "Please drop a valid PDF file.", "Only .pdf files are accepted.");
+    }
+  }
+
+  function setFile(file) {
+    selectedFile = file;
+    document.getElementById("fileName").textContent = file.name;
+    document.getElementById("fileSize").textContent = formatBytes(file.size);
+    document.getElementById("filePill").classList.remove("hidden");
+    document.getElementById("dropText").textContent = "File selected ✓";
+    updateDecryptButton();
+  }
+
+  function clearFile() {
+    selectedFile = null;
+    document.getElementById("pdfInput").value = "";
+    document.getElementById("filePill").classList.add("hidden");
+    document.getElementById("dropText").textContent = "Drop PDF here or click";
+    updateDecryptButton();
+    hideStatus();
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024)       return bytes + " B";
+    if (bytes < 1048576)    return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / 1048576).toFixed(1) + " MB";
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUTTON STATE
+  // ═══════════════════════════════════════════════════════════════════════════
+  function updateDecryptButton() {
+    const manual = document.getElementById("manualPwd").value.trim();
+    const ready  = selectedFile && (generatedPassword || manual);
+    document.getElementById("decryptBtn").disabled = !ready;
+  }
+
+  document.getElementById("manualPwd").addEventListener("input", updateDecryptButton);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // COPY PASSWORD
+  // ═══════════════════════════════════════════════════════════════════════════
+  function copyPassword() {
+    const pwd = document.getElementById("manualPwd").value.trim() || generatedPassword;
+    if (!pwd) return;
+    navigator.clipboard.writeText(pwd).then(() => {
+      const btn = document.getElementById("copyBtn");
+      const orig = btn.innerHTML;
+      btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+      btn.classList.add("text-vault-accent");
+      setTimeout(() => { btn.innerHTML = orig; btn.classList.remove("text-vault-accent"); }, 1500);
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATUS UI
+  // ═══════════════════════════════════════════════════════════════════════════
+  const ICONS = {
+    loading: `<svg class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5A623" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.2"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>`,
+    success: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00D4AA" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>`,
+    error:   `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF6B6B" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+  };
+
+  function showStatus(type, text, sub = "") {
+    document.getElementById("statusCard").classList.remove("hidden");
+    document.getElementById("statusIcon").innerHTML = ICONS[type] || "";
+    const tEl = document.getElementById("statusText");
+    tEl.textContent = text;
+    tEl.className = `text-sm font-mono font-medium status-${type}`;
+    document.getElementById("statusSub").textContent = sub;
+  }
+
+  function hideStatus() {
+    document.getElementById("statusCard").classList.add("hidden");
+  }
+
+  function setProgress(pct, step) {
+    document.getElementById("progressBar").style.width = pct + "%";
+    ["dot1","dot2","dot3"].forEach((id, i) => {
+      const el = document.getElementById(id);
+      el.className = "step-dot";
+      if (i + 1 < step) el.classList.add("done");
+      else if (i + 1 === step) el.classList.add("active");
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MAIN DECRYPT FLOW
+  // ═══════════════════════════════════════════════════════════════════════════
+  async function decryptPDF() {
+    if (!selectedFile) return showStatus("error", "Please select a PDF first.");
+
+    const manual   = document.getElementById("manualPwd").value.trim();
+    const password = manual || generatedPassword;
+    if (!password) return showStatus("error", "Password is required.", "Fill in name + DOB or enter a manual password.");
+
+    const apiUrl = document.getElementById("apiUrl").value.trim();
+    if (!apiUrl) return showStatus("error", "Backend API URL is required.");
+
+    // ── Disable button ────────────────────────────────────────────────────
+    const btn = document.getElementById("decryptBtn");
+    btn.disabled = true;
+    document.getElementById("btnText").textContent = "Decrypting…";
+
+    // ── Build FormData ────────────────────────────────────────────────────
+    const formData = new FormData();
+    formData.append("pdf", selectedFile);
+    formData.append("password", password);
+
+    // ── Step 1: Uploading ─────────────────────────────────────────────────
+    showStatus("loading", "Uploading PDF to server…", `File: ${selectedFile.name} · ${formatBytes(selectedFile.size)}`);
+    setProgress(20, 1);
+
+    try {
+      // ── Step 2: Decrypt ───────────────────────────────────────────────
+      setTimeout(() => {
+        showStatus("loading", "Running qpdf decryption…", "AES-256 decrypt in progress. Preserving vector layers & signatures…");
+        setProgress(55, 2);
+      }, 600);
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        let errMsg = "Decryption failed.";
+        try {
+          const errJson = await response.json();
+          errMsg = errJson.error || errMsg;
+        } catch (_) {}
+        setProgress(0, 1);
+        showStatus("error", errMsg, `HTTP ${response.status} · Check password and try again.`);
+        resetButton();
+        return;
+      }
+
+      // ── Step 3: Download ──────────────────────────────────────────────
+      showStatus("loading", "Preparing download…", "Streaming decrypted PDF…");
+      setProgress(85, 3);
+
+      const blob = await response.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = "aadhaar_unlocked.pdf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setProgress(100, 3);
+      showStatus(
+        "success",
+        "PDF decrypted & downloaded successfully!",
+        `Password used: ${password} · Original vector quality preserved · No canvas conversion`
+      );
+
+    } catch (err) {
+      setProgress(0, 1);
+      showStatus(
+        "error",
+        "Network error — could not reach backend.",
+        `${err.message} · Make sure your server is running at: ${apiUrl}`
+      );
+    }
+
+    resetButton();
+  }
+
+  function resetButton() {
+    document.getElementById("btnText").textContent = "Decrypt PDF";
+    updateDecryptButton();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SERVER HEALTH CHECK
+  // ═══════════════════════════════════════════════════════════════════════════
+  async function checkServerHealth() {
+    const apiUrl  = document.getElementById("apiUrl").value.trim();
+    const healthUrl = apiUrl.replace(/\/decrypt$/, "/health");
+    const el = document.getElementById("serverStatus");
+
+    try {
+      const res = await fetch(healthUrl, { signal: AbortSignal.timeout(4000) });
+      if (res.ok) {
+        const data = await res.json();
+        el.innerHTML = `<span class="w-2 h-2 rounded-full bg-vault-accent"></span><span>Server online · ${data.qpdf || "qpdf ok"}</span>`;
+        el.className = "flex items-center gap-2 text-xs font-mono text-vault-accent";
+      } else {
+        throw new Error("not ok");
+      }
+    } catch (_) {
+      el.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400"></span><span>Server offline</span>`;
+      el.className = "flex items-center gap-2 text-xs font-mono text-red-400";
+    }
+  }
+
+  // Check health on load & when API URL changes
+  document.getElementById("apiUrl").addEventListener("change", checkServerHealth);
+  window.addEventListener("load", checkServerHealth);
+  </script>
+</body>
+</html>

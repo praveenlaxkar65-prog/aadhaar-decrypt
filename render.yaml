@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: aadhaar-pdf-decrypt
+    env: node
+    region: singapore   # change to your preferred region
+    plan: free
+    buildCommand: apt-get update -y && apt-get install -y qpdf && npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
